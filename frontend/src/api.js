@@ -1,0 +1,207 @@
+// Vite env variable (create .env file to set this)
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080";
+
+export const getAuthToken = () => {
+  try {
+    return localStorage.getItem("token");
+  } catch (err) {
+    return null;
+  }
+};
+
+const buildHeaders = (includeAuth = false) => {
+  const headers = { "Content-Type": "application/json" };
+  const token = getAuthToken();
+
+  if (includeAuth && token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+  return headers;
+};
+
+const handleResponse = async (res) => {
+  const data = await res.json().catch(() => ({}));
+
+  if (!res.ok) {
+    throw new Error(data?.message || "Request failed");
+  }
+
+  return data;
+};
+
+export const post = async (path, body, includeAuth = false) => {
+  try {
+    const res = await fetch(`${API_URL}${path}`, {
+      method: "POST",
+      headers: buildHeaders(includeAuth),
+      body: JSON.stringify(body || {}),
+    });
+
+    return handleResponse(res);
+  } catch (err) {
+    if (err instanceof TypeError && err.message.includes("fetch")) {
+      throw new Error("Backend not reachable. Start Spring Boot server!");
+    }
+    throw err;
+  }
+};
+
+export const put = async (path, body, includeAuth = false) => {
+  try {
+    const res = await fetch(`${API_URL}${path}`, {
+      method: "PUT",
+      headers: buildHeaders(includeAuth),
+      body: JSON.stringify(body || {}),
+    });
+
+    return handleResponse(res);
+  } catch (err) {
+    if (err instanceof TypeError && err.message.includes("fetch")) {
+      throw new Error("Backend not reachable. Start Spring Boot server!");
+    }
+    throw err;
+  }
+};
+
+export const del = async (path, includeAuth = false) => {
+  try {
+    const res = await fetch(`${API_URL}${path}`, {
+      method: "DELETE",
+      headers: buildHeaders(includeAuth),
+    });
+
+    return handleResponse(res);
+  } catch (err) {
+    if (err instanceof TypeError && err.message.includes("fetch")) {
+      throw new Error("Backend not reachable. Start Spring Boot server!");
+    }
+    throw err;
+  }
+};
+
+export const get = async (path, includeAuth = false) => {
+  try {
+    const res = await fetch(`${API_URL}${path}`, {
+      method: "GET",
+      headers: buildHeaders(includeAuth),
+    });
+
+    return handleResponse(res);
+  } catch (err) {
+    if (err instanceof TypeError && err.message.includes("fetch")) {
+      throw new Error("Backend not reachable. Start Spring Boot server!");
+    }
+    throw err;
+  }
+};
+
+export const authApi = {
+  login: (email, password) =>
+    post("/auth/login", { email, password }),
+
+  sendOtp: (email, purpose) =>
+    post("/auth/send-otp", { email, purpose }),
+
+  verifyOtp: (payload) =>
+    post("/auth/verify-otp", payload),
+};
+
+export const feedApi = {
+  getFeed: (tab = 'FOR_YOU', page = 0, size = 10) => {
+    const params = new URLSearchParams();
+    params.append('tab', tab);
+    params.append('page', page);
+    params.append('size', size);
+    return get(`/api/feed?${params.toString()}`, true);
+  },
+};
+
+export const questionApi = {
+  createQuestion: (questionData) => post("/api/questions", questionData, true),
+  getQuestion: (id) => get(`/api/questions/${id}`, true),
+  updateQuestion: (id, questionData) => put(`/api/questions/${id}`, questionData, true),
+  deleteQuestion: (id) => del(`/api/questions/${id}`, true),
+  getAllQuestions: (page = 0, size = 10) => get(`/api/questions?page=${page}&size=${size}`, true),
+  searchQuestions: (query, tag, userId, page = 0, size = 10) => {
+    const params = new URLSearchParams();
+    if (query) params.append('query', query);
+    if (tag) params.append('tag', tag);
+    if (userId) params.append('userId', userId);
+    params.append('page', page);
+    params.append('size', size);
+    return get(`/api/questions/search?${params.toString()}`, true);
+  },
+};
+
+export const answerApi = {
+  answerQuestion: (questionId, answerData) => post(`/api/answers/question/${questionId}`, answerData, true),
+  getAnswers: (questionId, page = 0, size = 10) => get(`/api/answers/question/${questionId}?page=${page}&size=${size}`, true),
+  updateAnswer: (id, answerData) => put(`/api/answers/${id}`, answerData, true),
+  deleteAnswer: (id) => del(`/api/answers/${id}`, true),
+};
+
+export const commentApi = {
+  createComment: (postId, commentData) => post(`/api/comments/post/${postId}`, commentData, true),
+  updateComment: (id, commentData) => put(`/api/comments/${id}`, commentData, true),
+  deleteComment: (id) => del(`/api/comments/${id}`, true),
+  getCommentsForPost: (postId, page = 0, size = 10) => get(`/api/comments/post/${postId}?page=${page}&size=${size}`, true),
+};
+
+export const voteApi = {
+  voteQuestion: (questionId, voteType) => post(`/api/votes/questions/${questionId}?voteType=${voteType}`, {}, true),
+  voteAnswer: (answerId, voteType) => post(`/api/votes/answers/${answerId}?voteType=${voteType}`, {}, true),
+  voteComment: (commentId, voteType) => post(`/api/votes/comments/${commentId}?voteType=${voteType}`, {}, true),
+  getQuestionVoteStatus: (questionId) => get(`/api/votes/questions/${questionId}/status`, true),
+  getAnswerVoteStatus: (answerId) => get(`/api/votes/answers/${answerId}/status`, true),
+  getCommentVoteStatus: (commentId) => get(`/api/votes/comments/${commentId}/status`, true),
+  getQuestionVoteCounts: (questionId) => get(`/api/votes/questions/${questionId}/counts`, true),
+  getAnswerVoteCounts: (answerId) => get(`/api/votes/answers/${answerId}/counts`, true),
+  getCommentVoteCounts: (commentId) => get(`/api/votes/comments/${commentId}/counts`, true),
+};
+
+export const bookmarkApi = {
+  bookmarkPost: (postId) => post(`/api/bookmarks/${postId}`, {}, true),
+  unbookmarkPost: (postId) => del(`/api/bookmarks/${postId}`, true),
+  getMyBookmarks: (page = 0, size = 10) => get(`/api/bookmarks/me?page=${page}&size=${size}`, true),
+  isBookmarked: (postId) => get(`/api/bookmarks/${postId}/status`, true),
+};
+
+export const userApi = {
+  getCurrentUser: () => get('/api/users/me', true),
+  getUserProfile: (id) => get(`/api/users/${id}`, true),
+  updateUserProfile: (userData) => put('/api/users/me', userData, true),
+  getUserStats: (id) => get(`/api/users/${id}/stats`, true),
+  getUserSuggestions: () => get('/api/users/suggestions', true),
+  getUsersToFollow: () => get('/api/users/suggestions', true),
+  followUser: (id) => post(`/api/users/${id}/follow`, {}, true),
+  unfollowUser: (id) => del(`/api/users/${id}/follow`, true),
+  getFollowStatus: (id) => get(`/api/users/${id}/follow/status`, true),
+  getUserFollowers: (id) => get(`/api/users/${id}/followers`, true),
+  getUserFollowing: (id) => get(`/api/users/${id}/following`, true),
+  removeFollower: (id) => del(`/api/users/me/followers/${id}`, true),
+  getUserQuestions: (id, page = 0, size = 10) => get(`/api/users/${id}/questions?page=${page}&size=${size}`, true),
+  getUserAnswers: (id, page = 0, size = 10) => get(`/api/users/${id}/answers?page=${page}&size=${size}`, true),
+  searchUsers: (query, page = 0, size = 10) => get(`/api/users/search?query=${query}&page=${page}&size=${size}`, true),
+  updateTopics: (topics) => put('/api/users/me/topics', { topics }, true),
+};
+
+export const requestApi = {
+  createRequest: (questionId, expertId) => post('/api/requests', { questionId, expertId }, true),
+  getSuggestions: (questionId) => get(`/api/requests/suggestions?questionId=${questionId}`, true),
+  getMyPendingRequests: () => get('/api/requests/me/pending', true),
+};
+
+export const notificationApi = {
+  getNotifications: (page = 0, size = 10) => get(`/api/notifications?page=${page}&size=${size}`, true),
+  getNotifications: (page = 0, size = 10) => get(`/api/notifications?page=${page}&size=${size}`, true),
+  markAsRead: (id) => post(`/api/notifications/${id}/read`, {}, true),
+};
+
+export const chatApi = {
+  getConversations: () => get('/api/chat/conversations', true),
+  getMessages: (otherUserId) => get(`/api/chat/messages/${otherUserId}`, true),
+  sendMessageHttp: (payload) => post('/api/chat/send', payload, true),
+  markAsRead: (otherUserId) => put(`/api/chat/read/${otherUserId}`, {}, true),
+};
+
+export { API_URL };

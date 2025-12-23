@@ -1,0 +1,60 @@
+package com.example.Qpoint.service;
+
+import com.example.Qpoint.models.Notification;
+import com.example.Qpoint.models.User;
+import com.example.Qpoint.repository.NotificationRepository;
+import com.example.Qpoint.repository.UserRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+@Service
+public class NotificationService {
+
+    private final NotificationRepository notificationRepository;
+    private final UserRepository userRepository;
+
+    public NotificationService(NotificationRepository notificationRepository, UserRepository userRepository) {
+        this.notificationRepository = notificationRepository;
+        this.userRepository = userRepository;
+    }
+
+    @Transactional
+    public void createNotification(Long recipientId, Long senderId, Notification.NotificationType type, Long referenceId, String message) {
+        if (recipientId.equals(senderId)) return; // Don't notify self
+
+        User recipient = userRepository.findById(recipientId).orElseThrow(() -> new RuntimeException("Recipient not found"));
+        User sender = senderId != null ? userRepository.findById(senderId).orElse(null) : null;
+
+        Notification notification = Notification.builder()
+                .recipient(recipient)
+                .sender(sender)
+                .type(type)
+                .referenceId(referenceId)
+                .message(message)
+                .build();
+
+        notificationRepository.save(notification);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<Notification> getUserNotifications(Long userId, int page, int size) {
+        User user = userRepository.findById(userId).orElseThrow(() -> new RuntimeException("User not found"));
+        return notificationRepository.findByRecipientOrderByCreatedAtDesc(user, PageRequest.of(page, size));
+    }
+
+    @Transactional
+    public void markAsRead(Long notificationId, Long userId) {
+        Notification notification = notificationRepository.findById(notificationId)
+                .orElseThrow(() -> new RuntimeException("Notification not found"));
+        
+        if (!notification.getRecipient().getUserId().equals(userId)) {
+             throw new RuntimeException("Not authorized");
+        }
+
+        notification.setIsRead(true);
+        notificationRepository.save(notification);
+    }
+}

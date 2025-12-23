@@ -1,0 +1,24 @@
+package com.example.Qpoint.dto;
+
+import lombok.Data;
+import java.time.Instant;
+
+@Data
+public class PostCommentDto {
+    private Long id;
+    private Long postId;
+    private AuthorDto author;
+    private String content;
+    private Integer upvotes;
+    private Integer downvotes;
+    private Instant createdAt;
+    private Long parentId;
+    private java.util.List<PostCommentDto> replies;
+
+    @Data
+    public static class AuthorDto {
+        private Long id;
+        private String fullName;
+        private String avatarUrl;
+    }
+}

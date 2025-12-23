@@ -1,0 +1,606 @@
+import { useEffect, useState, useMemo } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { getAuthToken, userApi } from '../api';
+import Navbar from '../components/Home/Navbar';
+import LeftSidebar from '../components/Home/LeftSidebar';
+import MobileNav from '../components/Home/MobileNav';
+import CompactFeedCard from '../components/Feed/CompactFeedCard';
+
+export default function ProfilePage() {
+  const navigate = useNavigate();
+  const { id } = useParams();
+
+  const [me, setMe] = useState(null); // Current logged in user
+  const [profileUser, setProfileUser] = useState(null); // User whose profile we are viewing
+  const [stats, setStats] = useState(null);
+
+  const [activeTab, setActiveTab] = useState('overview');
+  const [questions, setQuestions] = useState([]);
+  const [followers, setFollowers] = useState([]);
+  const [following, setFollowing] = useState([]);
+  const [topics, setTopics] = useState([]);
+  const [pendingRequests, setPendingRequests] = useState([]);
+
+  // Topics Edit State
+  const [isEditingTopics, setIsEditingTopics] = useState(false);
+  const [newTopic, setNewTopic] = useState('');
+
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [isFollowingProfile, setIsFollowingProfile] = useState(false);
+
+  const isMe = useMemo(() => me && profileUser && me.userId === profileUser.userId, [me, profileUser]);
+
+  // Load everything
+  useEffect(() => {
+    const token = getAuthToken();
+    if (!token) {
+      navigate('/login', { replace: true });
+      return;
+    }
+    loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      setError('');
+
+      // 1. Get Current User (for Sidebar & Auth)
+      const meRes = await userApi.getCurrentUser();
+      setMe(meRes);
+
+      // 2. Determine Profile User
+      // If no ID param, we are viewing our own profile
+      let targetProfile = meRes;
+      if (id && id !== String(meRes.userId)) {
+        targetProfile = await userApi.getUserProfile(id);
+      }
+      setProfileUser(targetProfile);
+      setTopics(targetProfile.skills || []);
+
+      // 3. Get Stats
+      const statsRes = await userApi.getUserStats(targetProfile.userId);
+      setStats({
+        reputation: statsRes?.reputation || 0,
+        followers: statsRes?.followersCount || 0,
+        following: statsRes?.followingCount || 0,
+        questions: statsRes?.questionsCount || 0,
+      });
+
+      // 4. Check Follow Status (if strictly viewing someone else)
+      if (targetProfile.userId !== meRes.userId) {
+        const status = await userApi.getFollowStatus(targetProfile.userId).catch(() => false);
+        setIsFollowingProfile(!!status);
+      }
+
+      // 5. Fetch Content (Questions, Followers, Following)
+      // We allow parallel fetching for tabs content or lazy load. For simplicity, fetch all or lazy load?
+      // Let's fetch Questions initially as they are commonly viewed.
+      // Followers/Following can be fetched when tab is clicked, or just fetch now for simplicity.
+
+      const qRes = await userApi.getUserQuestions(targetProfile.userId);
+      const qList = Array.isArray(qRes) ? qRes : (qRes.content || []);
+      setQuestions(qList);
+
+      // Synchronize stats count with actual fetched count if provided in pagination metadata
+      if (!Array.isArray(qRes) && typeof qRes.totalElements === 'number') {
+        setStats(prev => ({
+          ...prev,
+          questions: qRes.totalElements
+        }));
+      } else if (Array.isArray(qRes)) {
+        // Fallback if no page info but full list returned
+        setStats(prev => ({
+          ...prev,
+          questions: qList.length
+        }));
+      }
+
+    } catch (err) {
+      console.error(err);
+      setError('Failed to load profile data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Dedicated effects to fetch tab specific data if needed,
+  // but for now let's just fetch Followers/Following when tab changes to them if they are empty
+  useEffect(() => {
+    if (!profileUser) return;
+
+    if (activeTab === 'followers' && followers.length === 0) {
+      userApi.getUserFollowers(profileUser.userId)
+        .then(res => setFollowers(res || []))
+        .catch(console.error);
+    }
+    if (activeTab === 'following' && following.length === 0) {
+      userApi.getUserFollowing(profileUser.userId)
+        .then(res => setFollowing(res || []))
+        .catch(console.error);
+    }
+    if (activeTab === 'following' && following.length === 0) {
+      userApi.getUserFollowing(profileUser.userId)
+        .then(res => setFollowing(res || []))
+        .catch(console.error);
+    }
+    // Fetch pending requests only if it is ME and tab is 'requests'
+    if (activeTab === 'requests' && isMe && pendingRequests.length === 0) {
+      import('../api').then(({ requestApi }) => {
+        requestApi.getMyPendingRequests()
+          .then(res => setPendingRequests(res || []))
+          .catch(console.error);
+      });
+    }
+  }, [activeTab, profileUser, followers.length, following.length, isMe, pendingRequests.length]);
+
+
+  // Actions
+  const handleFollowProfile = async () => {
+    if (!profileUser || !me) return;
+    try {
+      if (isFollowingProfile) {
+        await userApi.unfollowUser(profileUser.userId);
+        setIsFollowingProfile(false);
+        setStats(prev => ({ ...prev, followers: Math.max(0, prev.followers - 1) }));
+      } else {
+        await userApi.followUser(profileUser.userId);
+        setIsFollowingProfile(true);
+        setStats(prev => ({ ...prev, followers: prev.followers + 1 }));
+      }
+    } catch (e) { console.error(e); }
+  };
+
+  const handleFollowUserInList = async (targetId, isCurrentlyFollowing, listType) => {
+    // Toggle follow for a user in the Followers/Following list
+    try {
+      if (isCurrentlyFollowing) {
+        await userApi.unfollowUser(targetId);
+      } else {
+        await userApi.followUser(targetId);
+      }
+
+      // Update local state to reflect change immediately
+      // We need a way to track "am I following this user" for every user in the list.
+      // The API for getUserFollowers returns User objects. Does it include 'isFollowing'?
+      // Usually not. We might need a separate 'followedUsers' set like in HomePage.
+      // For simplicity in this "manage" view, let's assume we can toggle locally.
+
+      // However, we don't know the initial state for random users in the list easily without checking.
+      // BUT, if I am looking at MY OWN following list, I am following all of them obviously.
+      // If I am looking at MY OWN followers, I might or might not be following them.
+
+      // FOR THIS ITERATION: Let's assume generic "Follow/Unfollow" toggle logic
+      // and we track it via a local set of followed IDs if the list doesn't provide it.
+      // Or, better, we just toggle and trigger a refresh? No, that flickers.
+
+      // Let's simply update the specific list item if we can.
+      // Since the backend might not return 'isBookmarked' or 'isFollowing' on list items,
+      // we might just implement the button to toggle and stay in that state.
+
+      // Actually, `activeTab === 'following'` on `me` profile => All are TRUE.
+      // `activeTab === 'followers'` on `me` profile => Unknown.
+
+      // Simplified Approach:
+      // We'll maintain a `localFollowStatus` map for the list items that the user interacts with.
+    } catch (e) { console.error(e); }
+  };
+
+  // We need a better way to handle "Follow/Following" button state in lists.
+  // In `HomePage`, we mainted a `followedUsers` map. We should do the same here.
+  const handleAddTopic = () => {
+    if (!newTopic.trim()) return;
+    if (topics.includes(newTopic.trim())) return;
+    const updated = [...topics, newTopic.trim()];
+    setTopics(updated);
+    setNewTopic('');
+  };
+
+  const handleRemoveTopic = (topic) => {
+    setTopics(topics.filter(t => t !== topic));
+  };
+
+  const handleSaveTopics = async () => {
+    try {
+      await userApi.updateTopics(topics);
+      setIsEditingTopics(false);
+    } catch (e) {
+      console.error(e);
+      alert('Failed to save topics');
+    }
+  };
+
+  const [followedUsersMap, setFollowedUsersMap] = useState({});
+
+  const toggleFollowMap = async (targetId) => {
+    try {
+      const isFollowing = followedUsersMap[targetId];
+      if (isFollowing) {
+        await userApi.unfollowUser(targetId);
+      } else {
+        await userApi.followUser(targetId);
+      }
+      setFollowedUsersMap(prev => ({
+        ...prev,
+        [targetId]: !isFollowing
+      }));
+    } catch (e) { console.error(e); }
+  };
+
+  // When loading lists, we should ideally know who we follow.
+  // Since we don't want to blast the API, we will just trust the button click for now,
+  // OR assume 'Following' tab implies we follow them (if it's our profile).
+  // For 'Followers', we default to 'Follow' unless we know otherwise.
+  // This is a limitation of the current simple API.
+  // Improvements: The backend DTO should return `followedByCurrentUser`.
+  // For now, we will handle it gracefully: Button says "Follow" initially? Or check `following` list?
+
+  // Hack: If we load "Following" list for "Me", initialize map to true.
+  useEffect(() => {
+    if (activeTab === 'following' && profileUser?.userId === me?.userId && following.length > 0) {
+      const map = {};
+      following.forEach(u => map[u.userId] = true);
+      setFollowedUsersMap(prev => ({ ...prev, ...map }));
+    }
+  }, [activeTab, following, profileUser, me]);
+
+
+
+
+
+  if (loading) {
+    return <div className="min-h-screen bg-gray-50 p-6 text-center text-gray-500">Loading profile...</div>;
+  }
+
+  if (error || !profileUser) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Navbar user={me} />
+        <div className="flex justify-center p-10">
+          <div className="bg-white p-8 rounded-lg shadow-sm text-center">
+            <h3 className="text-xl font-bold text-gray-900 mb-2">Profile Not Found</h3>
+            <button className="text-red-600 hover:underline" onClick={() => navigate('/home')}>Go Home</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <Navbar user={me} />
+
+      <div className="flex">
+        <LeftSidebar user={me} onAskQuestion={() => navigate('/home')} />
+
+        <main className="flex-1 md:ml-64 p-6 bg-gray-50 min-h-screen">
+          <div className="max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+            {/* Left Column (Profile & Feed) */}
+            <div className="lg:col-span-2 space-y-6">
+
+              {/* Header Card */}
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden relative">
+                <div className="h-32 bg-gradient-to-r from-red-400 to-pink-500"></div>
+                <div className="px-6 pb-6">
+                  <div className="flex flex-col md:flex-row items-end -mt-12 mb-4 gap-4">
+                    <div className="w-24 h-24 rounded-full border-4 border-white bg-white shadow-md overflow-hidden flex-shrink-0">
+                      {profileUser.avatarUrl ? (
+                        <img src={profileUser.avatarUrl} alt={profileUser.fullName} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full bg-gray-100 flex items-center justify-center text-3xl font-bold text-gray-400">
+                          {profileUser.fullName?.[0]}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1 mb-2">
+                      <h1 className="text-2xl font-bold text-gray-900">{profileUser.fullName}</h1>
+                      <p className="text-gray-500">@{profileUser.username}</p>
+                    </div>
+                    <div className="mb-2 flex gap-2">
+                      {isMe ? (
+                        <button
+                          className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-lg transition-colors"
+                          onClick={() => navigate('/settings')}
+                        >
+                          Edit Profile
+                        </button>
+                      ) : (
+                        <>
+                          <button
+                            className={`px-4 py-2 font-medium rounded-lg transition-all shadow-sm ${isFollowingProfile
+                              ? 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+                              : 'bg-red-500 hover:bg-red-600 text-white'
+                              }`}
+                            onClick={handleFollowProfile}
+                          >
+                            {isFollowingProfile ? 'Following' : 'Follow'}
+                          </button>
+                          {profileUser.allowPublicMessages && (
+                            <button
+                              className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-lg transition-colors"
+                              onClick={() => navigate('/chat')}
+                            >
+                              Message
+                            </button>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  {profileUser.bio && (
+                    <p className="text-gray-700 mb-4 max-w-2xl">{profileUser.bio}</p>
+                  )}
+
+                </div>
+
+                <div className="flex items-center gap-6 border-t border-gray-100 pt-4 text-sm">
+                  <div className="text-center md:text-left">
+                    <span className="font-bold text-gray-900 block md:inline md:mr-1">{stats?.questions}</span>
+                    <span className="text-gray-500">Posts</span>
+                  </div>
+                  <div className="text-center md:text-left cursor-pointer hover:text-red-600 transition-colors" onClick={() => setActiveTab('followers')}>
+                    <span className="font-bold text-gray-900 block md:inline md:mr-1">{stats?.followers}</span>
+                    <span className="text-gray-500">Followers</span>
+                  </div>
+                  <div className="text-center md:text-left cursor-pointer hover:text-red-600 transition-colors" onClick={() => setActiveTab('following')}>
+                    <span className="font-bold text-gray-900 block md:inline md:mr-1">{stats?.following}</span>
+                    <span className="text-gray-500">Following</span>
+                  </div>
+                  <div className="text-center md:text-left ml-auto">
+                    <span className="font-bold text-gray-900 block md:inline md:mr-1">{stats?.reputation}</span>
+                    <span className="text-gray-500">Reputation</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Tabs */}
+              <div className="flex border-t border-gray-200 px-6">
+                {['overview', 'posts', 'followers', 'following'].concat(isMe ? ['requests'] : []).map((tab) => (
+                  <button
+                    key={tab}
+                    className={`py-4 mr-8 text-sm font-medium border-b-2 transition-colors capitalize ${activeTab === tab
+                      ? 'border-red-500 text-red-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700'
+                      }`}
+                    onClick={() => setActiveTab(tab)}
+                  >
+                    {tab}
+                  </button>
+                ))}
+              </div>
+
+
+              {/* Content Area (Inside Left Column) */}
+              <div className="space-y-4">
+                {activeTab === 'overview' && (
+                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 text-center text-gray-500 py-12">
+                    <p>Overview stats and highlights coming soon.</p>
+                    <button className="text-red-500 font-medium mt-2" onClick={() => setActiveTab('posts')}>View Posts</button>
+                  </div>
+                )}
+
+                {activeTab === 'posts' && (
+                  <div className="space-y-4">
+                    {questions.length > 0 ? questions.map(q => (
+                      <CompactFeedCard key={q.id} post={q} />
+                    )) : (
+                      <div className="text-center py-12 text-gray-500 bg-white rounded-lg border border-gray-200">
+                        No posts yet.
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {(activeTab === 'followers' || activeTab === 'following') && (
+                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                    {(activeTab === 'followers' ? followers : following).length > 0 ? (
+                      <div className="divide-y divide-gray-100">
+                        {(activeTab === 'followers' ? followers : following).map(u => (
+                          <div
+                            key={u.userId}
+                            className="flex items-center justify-between p-4 hover:bg-gray-50 transition-colors"
+                          >
+                            <div
+                              className="flex items-center gap-3 cursor-pointer"
+                              onClick={() => navigate(`/profile/${u.userId}`)}
+                            >
+                              <div className="w-10 h-10 rounded-full bg-gray-200 overflow-hidden">
+                                {u.avatarUrl ? (
+                                  <img
+                                    src={u.avatarUrl}
+                                    alt={u.fullName}
+                                    className="w-full h-full object-cover"
+                                  />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center text-gray-500 font-bold">
+                                    {u.fullName?.[0]}
+                                  </div>
+                                )}
+                              </div>
+
+                              <div>
+                                <h4 className="font-semibold text-gray-900 text-sm">
+                                  {u.fullName}
+                                </h4>
+                                <p className="text-xs text-gray-500">@{u.username}</p>
+                              </div>
+                            </div>
+
+                            {me.userId !== u.userId && (
+                              <>
+                                {isMe ? (
+                                  activeTab === 'followers' ? (
+                                    <button
+                                      className="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-300 text-gray-600 bg-white hover:bg-gray-100 hover:text-red-600 transition-colors"
+                                      onClick={async () => {
+                                        if (!window.confirm("Remove this follower?")) return;
+                                        try {
+                                          await userApi.removeFollower(u.userId);
+                                          setFollowers(prev =>
+                                            prev.filter(f => f.userId !== u.userId)
+                                          );
+                                          setStats(prev => ({
+                                            ...prev,
+                                            followers: prev.followers - 1
+                                          }));
+                                        } catch (e) {
+                                          console.error(e);
+                                        }
+                                      }}
+                                    >
+                                      Remove
+                                    </button>
+                                  ) : (
+                                    <button
+                                      className="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-300 text-gray-600 bg-white hover:bg-gray-100 hover:text-red-600 transition-colors"
+                                      onClick={async () => {
+                                        try {
+                                          await userApi.unfollowUser(u.userId);
+                                          setFollowing(prev =>
+                                            prev.filter(f => f.userId !== u.userId)
+                                          );
+                                          setStats(prev => ({
+                                            ...prev,
+                                            following: prev.following - 1
+                                          }));
+                                        } catch (e) {
+                                          console.error(e);
+                                        }
+                                      }}
+                                    >
+                                      Unfollow
+                                    </button>
+                                  )
+                                ) : (
+                                  <button
+                                    className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${followedUsersMap[u.userId]
+                                      ? 'border-gray-300 text-gray-600 bg-white hover:bg-gray-50'
+                                      : 'border-red-500 text-white bg-red-500 hover:bg-red-600'
+                                      }`}
+                                    onClick={() => toggleFollowMap(u.userId)}
+                                  >
+                                    {followedUsersMap[u.userId] ? 'Following' : 'Follow'}
+                                  </button>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-12 text-gray-500">
+                        {activeTab === 'followers'
+                          ? 'No followers yet.'
+                          : 'Not following anyone yet.'}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+
+                {activeTab === 'requests' && isMe && (
+                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                    {pendingRequests.length > 0 ? (
+                      <div className="divide-y divide-gray-100">
+                        {pendingRequests.map(req => (
+                          <div key={req.id} className="p-4 hover:bg-gray-50 flex items-start gap-3">
+                            <div className="w-10 h-10 rounded-full bg-gray-200 flex-shrink-0 overflow-hidden">
+                              {req.requesterAvatar ? <img src={req.requesterAvatar} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center font-bold text-gray-500">{req.requesterName?.[0]}</div>}
+                            </div>
+                            <div className="flex-1">
+                              <p className="text-sm text-gray-900">
+                                <span className="font-semibold">{req.requesterName}</span> requested you to answer:
+                              </p>
+                              <a href={`/question/${req.questionId}`} className="text-base font-medium text-red-600 hover:underline block mt-1 leading-snug">
+                                {req.questionTitle}
+                              </a>
+                              <p className="text-xs text-gray-400 mt-2">{new Date(req.createdAt).toLocaleDateString()}</p>
+                            </div>
+                            <button
+                              onClick={() => navigate(`/question/${req.questionId}`)}
+                              className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white text-sm font-medium rounded-lg transition-colors"
+                            >
+                              Answer
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-12 text-gray-500">
+                        No pending answer requests.
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div> {/* Close Left Column */}
+
+            {/* Right Column (Sidebar) */}
+            <div className="hidden lg:block space-y-6">
+
+              {/* Topics / Expertise Card */}
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-bold text-gray-900">Expertise / Interests</h3>
+                  {isMe && !isEditingTopics && (
+                    <button onClick={() => setIsEditingTopics(true)} className="text-xs text-red-500 font-medium hover:underline">Edit</button>
+                  )}
+                </div>
+
+                {isEditingTopics ? (
+                  <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
+                    <div className="flex flex-wrap gap-2 mb-3">
+                      {topics.map(t => (
+                        <span key={t} className="bg-white border border-gray-200 text-gray-700 px-2 py-1 rounded-full text-xs flex items-center gap-1">
+                          {t}
+                          <button onClick={() => handleRemoveTopic(t)} className="text-gray-400 hover:text-red-500 font-bold ml-1">×</button>
+                        </span>
+                      ))}
+                    </div>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={newTopic}
+                        onChange={(e) => setNewTopic(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleAddTopic()}
+                        placeholder="Add topic..."
+                        className="flex-1 text-sm border-gray-300 rounded-md focus:ring-red-500 focus:border-red-500"
+                      />
+                      <button onClick={handleAddTopic} className="px-3 py-1 bg-gray-200 text-gray-700 rounded-md text-sm hover:bg-gray-300">Add</button>
+                    </div>
+                    <div className="mt-3 flex gap-2 justify-end">
+                      <button onClick={() => { setIsEditingTopics(false); setTopics(profileUser.skills || []); }} className="text-xs text-gray-500 hover:text-gray-700">Cancel</button>
+                      <button onClick={handleSaveTopics} className="text-xs bg-red-500 text-white px-3 py-1 rounded-md hover:bg-red-600">Save</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {topics.length > 0 ? topics.map(t => (
+                      <span key={t} className="bg-red-50 text-red-600 px-3 py-1 rounded-full text-xs font-medium cursor-default">
+                        #{t}
+                      </span>
+                    )) : (
+                      <div className="text-center py-4">
+                        <span className="text-gray-400 text-sm italic">No topics added yet.</span>
+                        {isMe && <button onClick={() => setIsEditingTopics(true)} className="block mx-auto mt-2 text-red-500 text-xs hover:underline">Add Topics</button>}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Stats Card (Optional, maybe move detailed stats here?) */}
+              {/* Fore now just the topics as requested */}
+
+            </div>
+          </div>
+        </main>
+      </div >
+      <MobileNav onAskQuestion={() => navigate('/home')} />
+    </div >
+  );
+}

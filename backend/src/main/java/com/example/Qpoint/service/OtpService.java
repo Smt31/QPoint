@@ -1,0 +1,170 @@
+package com.example.Qpoint.service;
+
+
+import com.example.Qpoint.dto.VerifyOtpRequest;
+import com.example.Qpoint.models.OtpPurpose;
+import com.example.Qpoint.models.OtpToken;
+import com.example.Qpoint.models.User;
+import com.example.Qpoint.repository.OtpTokenRepository;
+import com.example.Qpoint.repository.UserRepository;
+import com.example.Qpoint.util.OtpUtil;
+import jakarta.transaction.Transactional;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+
+import java.time.Instant;
+import java.util.Optional;
+
+@Service
+public class OtpService {
+
+    private final OtpTokenRepository otpRepo;
+    private final UserRepository userRepo;
+    private final MailService mailService;
+    private final PasswordEncoder passwordEncoder;
+
+    public OtpService(OtpTokenRepository otpRepo, UserRepository userRepo, MailService mailService, PasswordEncoder passwordEncoder) {
+        this.otpRepo = otpRepo;
+        this.userRepo = userRepo;
+        this.mailService = mailService;
+        this.passwordEncoder = passwordEncoder;
+    }
+
+    public void sendOtp(String email, OtpPurpose purpose) {
+        String code = OtpUtil.generateNumericOtp(6);
+        Instant now = Instant.now();
+
+        OtpToken otp = OtpToken.builder()
+                .email(email)
+                .code(code)
+                .purpose(purpose == null ? OtpPurpose.LOGIN : purpose)
+                .createdAt(now)
+                .expiresAt(now.plusSeconds(5 * 60))
+                .used(false)
+                .build();
+
+        otpRepo.save(otp);
+        try {
+            mailService.sendOtpEmail(email, code);
+        } catch (Exception e) {
+            // Fallback to console if mail is not configured
+            System.err.println("\n⚠ EMAIL SEND FAILED - Using console fallback");
+            System.err.println("Error: " + e.getMessage());
+            System.err.println("\nTo enable email:");
+            System.err.println("1. Set SMTP_USER and SMTP_PASS environment variables, OR");
+            System.err.println("2. Update application.properties with your email credentials");
+            System.err.println("   For Gmail: Use App Password (not regular password)");
+            System.err.println("   Get it from: https://myaccount.google.com/apppasswords\n");
+            System.out.println("========================================");
+            System.out.println("OTP CODE: " + code);
+            System.out.println("Email: " + email);
+            System.out.println("Purpose: " + purpose);
+            System.out.println("(Valid for 5 minutes)");
+            System.out.println("========================================\n");
+        }
+    }
+
+    @Transactional
+    public Optional<User> verifyOtpAndCreateUser(VerifyOtpRequest req) {
+        Optional<OtpToken> maybe = otpRepo.findTopByEmailAndCodeAndUsedFalseOrderByCreatedAtDesc(req.getEmail(), req.getCode());
+        if (maybe.isEmpty()) return Optional.empty();
+
+        OtpToken otp = maybe.get();
+        if (Boolean.TRUE.equals(otp.getUsed()) || Instant.now().isAfter(otp.getExpiresAt())) return Optional.empty();
+
+        otp.setUsed(true);
+        otpRepo.save(otp);
+
+        User user = userRepo.findByEmail(req.getEmail()).orElseGet(() -> {
+            String finalUsername;
+            if (req.getUsername() != null && !req.getUsername().isBlank()) {
+                 if (userRepo.existsByUsername(req.getUsername())) {
+                     throw new RuntimeException("Username '" + req.getUsername() + "' is already taken.");
+                 }
+                 finalUsername = req.getUsername();
+            } else {
+                 finalUsername = buildUsername(req.getEmail(), null);
+            }
+
+            String fullName = (req.getFullName() == null || req.getFullName().isBlank())
+                    ? finalUsername
+                    : req.getFullName();
+
+            User.UserBuilder builder = User.builder()
+                    .email(req.getEmail())
+                    .username(finalUsername)
+                    .fullName(fullName)
+                    .mobileNumber(req.getMobileNumber())
+                    .avatarUrl(req.getAvatarUrl())
+                    .bio(req.getBio())
+                    .verified(true)
+
+
+                    .answersCount(0)
+                    .questionsCount(0)
+                    .followersCount(0)
+                    .followingCount(0)
+                    .reputation(0)
+
+                    .createdAt(Instant.now())
+                    .updatedAt(Instant.now());
+            
+
+            if (req.getPassword() != null && !req.getPassword().isBlank()) {
+                builder.passwordHash(passwordEncoder.encode(req.getPassword()));
+            }
+            
+            return userRepo.save(builder.build());
+        });
+
+        boolean updated = false;
+        if (!user.getVerified()) { user.setVerified(true); updated = true; }
+        if (req.getUsername() != null && !req.getUsername().isBlank()) {
+            if (!req.getUsername().equals(user.getUsername())) {
+                if (userRepo.existsByUsername(req.getUsername())) {
+                    throw new RuntimeException("Username '" + req.getUsername() + "' is already taken.");
+                }
+                user.setUsername(req.getUsername());
+                updated = true;
+            }
+        }
+        if (req.getFullName() != null && !req.getFullName().isBlank()) { 
+            user.setFullName(req.getFullName()); 
+            updated = true; 
+        }
+        if (req.getFirstName() != null && !req.getFirstName().isBlank() && req.getLastName() != null && !req.getLastName().isBlank()) {
+            // Update fullName from firstName + lastName if provided
+            user.setFullName(req.getFirstName() + " " + req.getLastName());
+            updated = true;
+        }
+        if (req.getMobileNumber() != null) { user.setMobileNumber(req.getMobileNumber()); updated = true; }
+        if (req.getAvatarUrl() != null) { user.setAvatarUrl(req.getAvatarUrl()); updated = true; }
+        if (req.getBio() != null) { user.setBio(req.getBio()); updated = true; }
+        
+        // Update password if provided
+        if (req.getPassword() != null && !req.getPassword().isBlank()) {
+            user.setPasswordHash(passwordEncoder.encode(req.getPassword()));
+            updated = true;
+        }
+
+        if (updated) userRepo.save(user);
+
+        // link OTP to the resolved user for history/debugging
+        otp.setUser(user);
+        otpRepo.save(otp);
+
+        return Optional.of(user);
+    }
+
+    private String buildUsername(String email, String requestedUsername) {
+        if (requestedUsername != null && !requestedUsername.isBlank() && !userRepo.existsByUsername(requestedUsername)) {
+            return requestedUsername.trim();
+        }
+        String localPart = email != null && email.contains("@")
+                ? email.substring(0, email.indexOf('@'))
+                : "user";
+        String candidate = localPart.replaceAll("[^a-zA-Z0-9_]", "_");
+        int suffix = (int) (Math.random() * 9000) + 1000;
+        return candidate + "_" + suffix;
+    }
+}

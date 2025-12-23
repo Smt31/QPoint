@@ -1,0 +1,79 @@
+##################################
+# GLOBAL
+##################################
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDEs
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+
+##################################
+# ENVIRONMENT FILES (IMPORTANT)
+##################################
+
+.env
+.env.*
+*.env
+*.env.*
+*env*
+env.properties
+
+##################################
+# FRONTEND (Vite / React)
+##################################
+
+# Node modules
+node_modules/
+frontend/node_modules/
+frontend/node_modules/**
+
+# Build output
+frontend/dist/
+dist/
+
+##################################
+# BACKEND (Spring Boot / Maven)
+##################################
+
+# Maven
+target/
+backend/target/
+.mvn/
+.mvn/wrapper/maven-wrapper.jar
+
+# Allow target inside src if needed
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+##################################
+# SPRING / STS
+##################################
+
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings/
+.springBeans
+.sts4-cache
+
+##################################
+# NETBEANS
+##################################
+
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+build/
+
+!**/src/main/**/build/
+!**/src/test/**/build/
+
