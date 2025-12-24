@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { voteApi, commentApi } from '../../api';
+import { voteApi, commentApi, userApi } from '../../api';
 
 // Helper to flatten nested replies into a single list
 const flattenReplies = (replies) => {
@@ -29,6 +29,15 @@ export default function CommentItem({ comment, postId, refreshComments, me, dept
     const [replyContent, setReplyContent] = useState('');
     const [submitting, setSubmitting] = useState(false);
 
+    // @mention autocomplete
+    const [showMentionDropdown, setShowMentionDropdown] = useState(false);
+    const [mentionQuery, setMentionQuery] = useState('');
+    const [mentionSuggestions, setMentionSuggestions] = useState([]);
+    const [mentionCursorPosition, setMentionCursorPosition] = useState(0);
+    const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(0);
+    const inputRef = useRef(null);
+    const dropdownRef = useRef(null);
+
     // Determine children: If root, flatten all descendants. If not root, ignore nested (handled by root).
     const isRoot = depth === 0;
     const flatChildren = isRoot ? flattenReplies(comment.replies) : [];
@@ -40,6 +49,24 @@ export default function CommentItem({ comment, postId, refreshComments, me, dept
                 .catch(err => console.error(err));
         }
     }, [comment.id, me]);
+
+    // Search for users when mentionQuery changes
+    useEffect(() => {
+        if (mentionQuery.length > 0) {
+            userApi.searchUsers(mentionQuery, 0, 5)
+                .then(response => {
+                    const users = response.content || [];
+                    setMentionSuggestions(users);
+                    setSelectedSuggestionIndex(0);
+                })
+                .catch(err => {
+                    console.error('Failed to search users:', err);
+                    setMentionSuggestions([]);
+                });
+        } else {
+            setMentionSuggestions([]);
+        }
+    }, [mentionQuery]);
 
     const handleVote = async (type) => {
         if (!me) return;
@@ -79,7 +106,86 @@ export default function CommentItem({ comment, postId, refreshComments, me, dept
     const handleReplyClick = () => {
         setIsReplying(!isReplying);
         if (!isReplying) {
-            setReplyContent(`@${comment.author?.username || 'user'} `);
+            // Fixed: Use actual username from comment.author
+            const username = comment.author?.username;
+            if (username) {
+                setReplyContent(`@${username} `);
+            }
+        }
+    };
+
+    const handleReplyContentChange = (e) => {
+        const value = e.target.value;
+        const cursorPos = e.target.selectionStart;
+
+        setReplyContent(value);
+        setMentionCursorPosition(cursorPos);
+
+        // Check if we're typing an @mention
+        const beforeCursor = value.substring(0, cursorPos);
+        const lastAtIndex = beforeCursor.lastIndexOf('@');
+
+        if (lastAtIndex !== -1) {
+            const afterAt = beforeCursor.substring(lastAtIndex + 1);
+            // Check if there's a space after @ (which would end the mention)
+            if (!afterAt.includes(' ')) {
+                setMentionQuery(afterAt);
+                setShowMentionDropdown(true);
+            } else {
+                setShowMentionDropdown(false);
+                setMentionQuery('');
+            }
+        } else {
+            setShowMentionDropdown(false);
+            setMentionQuery('');
+        }
+    };
+
+    const handleMentionSelect = (user) => {
+        const beforeCursor = replyContent.substring(0, mentionCursorPosition);
+        const afterCursor = replyContent.substring(mentionCursorPosition);
+        const lastAtIndex = beforeCursor.lastIndexOf('@');
+
+        if (lastAtIndex !== -1) {
+            const newContent =
+                replyContent.substring(0, lastAtIndex) +
+                `@${user.username} ` +
+                afterCursor;
+
+            setReplyContent(newContent);
+            setShowMentionDropdown(false);
+            setMentionQuery('');
+
+            // Focus back on input
+            setTimeout(() => {
+                if (inputRef.current) {
+                    const newCursorPos = lastAtIndex + user.username.length + 2; // +2 for @ and space
+                    inputRef.current.focus();
+                    inputRef.current.setSelectionRange(newCursorPos, newCursorPos);
+                }
+            }, 0);
+        }
+    };
+
+    const handleKeyDown = (e) => {
+        if (showMentionDropdown && mentionSuggestions.length > 0) {
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                setSelectedSuggestionIndex(prev =>
+                    prev < mentionSuggestions.length - 1 ? prev + 1 : 0
+                );
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                setSelectedSuggestionIndex(prev =>
+                    prev > 0 ? prev - 1 : mentionSuggestions.length - 1
+                );
+            } else if (e.key === 'Enter' && mentionSuggestions[selectedSuggestionIndex]) {
+                e.preventDefault();
+                handleMentionSelect(mentionSuggestions[selectedSuggestionIndex]);
+            } else if (e.key === 'Escape') {
+                setShowMentionDropdown(false);
+                setMentionQuery('');
+            }
         }
     };
 
@@ -95,6 +201,8 @@ export default function CommentItem({ comment, postId, refreshComments, me, dept
             });
             setIsReplying(false);
             setReplyContent('');
+            setShowMentionDropdown(false);
+            setMentionQuery('');
             refreshComments();
         } catch (err) {
             console.error(err);
@@ -211,22 +319,67 @@ export default function CommentItem({ comment, postId, refreshComments, me, dept
                     </div>
 
                     {isReplying && (
-                        <form onSubmit={handleSubmitReply} className="mt-3 flex gap-2">
-                            <input
-                                className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-100 focus:border-red-300 transition-all"
-                                placeholder={`Reply to ${comment.author?.fullName}...`}
-                                value={replyContent}
-                                onChange={e => setReplyContent(e.target.value)}
-                                autoFocus
-                            />
-                            <button
-                                type="submit"
-                                className="text-white bg-red-500 px-4 py-2 rounded-lg hover:bg-red-600 disabled:opacity-50 font-medium transition-colors"
-                                disabled={submitting}
-                            >
-                                Send
-                            </button>
-                        </form>
+                        <div className="mt-3 relative">
+                            <form onSubmit={handleSubmitReply} className="flex gap-2">
+                                <input
+                                    ref={inputRef}
+                                    className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-100 focus:border-red-300 transition-all"
+                                    placeholder={`Reply to ${comment.author?.fullName}...`}
+                                    value={replyContent}
+                                    onChange={handleReplyContentChange}
+                                    onKeyDown={handleKeyDown}
+                                    autoFocus
+                                />
+                                <button
+                                    type="submit"
+                                    className="text-white bg-red-500 px-4 py-2 rounded-lg hover:bg-red-600 disabled:opacity-50 font-medium transition-colors"
+                                    disabled={submitting}
+                                >
+                                    Send
+                                </button>
+                            </form>
+
+                            {/* Mention Suggestions Dropdown */}
+                            {showMentionDropdown && mentionSuggestions.length > 0 && (
+                                <div
+                                    ref={dropdownRef}
+                                    className="absolute z-50 mt-1 w-64 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto"
+                                    style={{ top: '100%', left: 0 }}
+                                >
+                                    {mentionSuggestions.map((user, index) => (
+                                        <div
+                                            key={user.userId}
+                                            className={`flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors ${index === selectedSuggestionIndex
+                                                    ? 'bg-red-50'
+                                                    : 'hover:bg-gray-50'
+                                                }`}
+                                            onClick={() => handleMentionSelect(user)}
+                                            onMouseEnter={() => setSelectedSuggestionIndex(index)}
+                                        >
+                                            <div className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs uppercase flex-shrink-0 bg-gray-400">
+                                                {user.avatarUrl ? (
+                                                    <img
+                                                        src={user.avatarUrl}
+                                                        alt=""
+                                                        className="w-full h-full rounded-full object-cover"
+                                                    />
+                                                ) : (
+                                                    user.fullName?.[0] || 'U'
+                                                )}
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="font-semibold text-sm text-gray-900 truncate">
+                                                    {user.fullName}
+                                                </div>
+                                                <div className="text-xs text-gray-500 truncate">
+                                                    @{user.username}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
                     )}
                 </div>
             </div>
