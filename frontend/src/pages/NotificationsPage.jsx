@@ -2,12 +2,14 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '../components/Home/Navbar';
 import LeftSidebar from '../components/Home/LeftSidebar';
+import MobileNav from '../components/Home/MobileNav';
 import { notificationApi, userApi } from '../api';
 
 export default function NotificationsPage() {
     const [notifications, setNotifications] = useState([]);
     const [loading, setLoading] = useState(true);
     const [currentUser, setCurrentUser] = useState(null);
+    const [error, setError] = useState('');
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -18,9 +20,13 @@ export default function NotificationsPage() {
                     notificationApi.getNotifications()
                 ]);
                 setCurrentUser(user);
-                setNotifications(notifs.content || []);
+                // Handle both paginated response and direct array
+                const notifArray = Array.isArray(notifs) ? notifs : (notifs.content || notifs.data || []);
+                setNotifications(notifArray);
+                setError('');
             } catch (error) {
                 console.error('Failed to load notifications', error);
+                setError(error.message || 'Failed to load notifications');
             } finally {
                 setLoading(false);
             }
@@ -71,7 +77,7 @@ export default function NotificationsPage() {
         <div className="min-h-screen bg-[#FFF5F6]">
             <Navbar user={currentUser} />
             <div className="flex">
-                {currentUser && <LeftSidebar user={currentUser} />}
+                {currentUser && <LeftSidebar user={currentUser} onAskQuestion={() => navigate('/home')} />}
 
                 <main className="flex-1 md:ml-64 p-6 max-w-4xl">
                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -81,6 +87,20 @@ export default function NotificationsPage() {
 
                         {loading ? (
                             <div className="p-8 text-center text-gray-500">Loading notifications...</div>
+                        ) : error ? (
+                            <div className="p-12 text-center">
+                                <div className="mx-auto w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-4">
+                                    <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                </div>
+                                <h3 className="text-lg font-medium text-gray-900 mb-2">Failed to Load Notifications</h3>
+                                <p className="text-gray-500 mb-4">{error}</p>
+                                <button
+                                    onClick={() => window.location.reload()}
+                                    className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white font-medium rounded-lg transition-colors"
+                                >
+                                    Retry
+                                </button>
+                            </div>
                         ) : notifications.length === 0 ? (
                             <div className="p-12 text-center text-gray-500">
                                 <div className="mx-auto w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
@@ -118,6 +138,7 @@ export default function NotificationsPage() {
                     </div>
                 </main>
             </div>
+            <MobileNav onAskQuestion={() => navigate('/home')} />
         </div>
     );
 }

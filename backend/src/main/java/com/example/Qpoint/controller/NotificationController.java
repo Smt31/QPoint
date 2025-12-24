@@ -1,6 +1,6 @@
 package com.example.Qpoint.controller;
 
-import com.example.Qpoint.models.Notification;
+import com.example.Qpoint.dto.NotificationDto;
 import com.example.Qpoint.service.NotificationService;
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
@@ -20,7 +20,7 @@ public class NotificationController {
     }
 
     @GetMapping
-    public ResponseEntity<Page<Notification>> getNotifications(Authentication authentication,
+    public ResponseEntity<Page<NotificationDto>> getNotifications(Authentication authentication,
                                                                @RequestParam(defaultValue = "0") int page,
                                                                @RequestParam(defaultValue = "10") int size) {
         if (authentication == null || !authentication.isAuthenticated()) {

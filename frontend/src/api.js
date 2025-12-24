@@ -187,12 +187,13 @@ export const userApi = {
 
 export const requestApi = {
   createRequest: (questionId, expertId) => post('/api/requests', { questionId, expertId }, true),
+
   getSuggestions: (questionId) => get(`/api/requests/suggestions?questionId=${questionId}`, true),
   getMyPendingRequests: () => get('/api/requests/me/pending', true),
+  searchExperts: (query) => get(`/api/requests/search?query=${encodeURIComponent(query)}`, true),
 };
 
 export const notificationApi = {
-  getNotifications: (page = 0, size = 10) => get(`/api/notifications?page=${page}&size=${size}`, true),
   getNotifications: (page = 0, size = 10) => get(`/api/notifications?page=${page}&size=${size}`, true),
   markAsRead: (id) => post(`/api/notifications/${id}/read`, {}, true),
 };

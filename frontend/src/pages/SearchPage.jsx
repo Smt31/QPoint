@@ -192,12 +192,12 @@ const SearchPage = () => {
                   searchResults.map((question) => (
                     <div key={question.id} className="border-b border-gray-100 pb-6 last:border-0 last:pb-0">
                       <h3 className="text-lg font-semibold mb-2">
-                        <a
-                          href={`/question/${question.id}`}
-                          className="text-blue-600 hover:text-blue-800"
+                        <span
+                          onClick={() => navigate(`/question/${question.id}`)}
+                          className="text-blue-600 hover:text-blue-800 cursor-pointer"
                         >
                           {question.title}
-                        </a>
+                        </span>
                       </h3>
                       <p className="text-gray-600 mb-3">
                         {question.content?.substring(0, 150)}{question.content?.length > 150 ? '...' : ''}
@@ -245,20 +245,20 @@ const SearchPage = () => {
                         />
                         <div>
                           <h3 className="text-lg font-semibold">
-                            <a href={`/profile/${user.userId}`} className="text-gray-900 hover:text-blue-600">
+                            <span onClick={() => navigate(`/profile/${user.userId}`)} className="text-gray-900 hover:text-blue-600 cursor-pointer">
                               {user.fullName || user.username}
-                            </a>
+                            </span>
                           </h3>
                           <p className="text-sm text-gray-500">@{user.username}</p>
                           {user.bio && <p className="text-sm text-gray-600 mt-1">{user.bio}</p>}
                         </div>
                       </div>
-                      <a
-                        href={`/profile/${user.userId}`}
+                      <button
+                        onClick={() => navigate(`/profile/${user.userId}`)}
                         className="px-4 py-2 border border-blue-600 text-blue-600 rounded-lg hover:bg-blue-50 text-sm font-medium transition-colors"
                       >
                         View Profile
-                      </a>
+                      </button>
                     </div>
                   ))
                 )}

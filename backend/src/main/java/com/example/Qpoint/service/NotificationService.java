@@ -1,5 +1,6 @@
 package com.example.Qpoint.service;
 
+import com.example.Qpoint.dto.NotificationDto;
 import com.example.Qpoint.models.Notification;
 import com.example.Qpoint.models.User;
 import com.example.Qpoint.repository.NotificationRepository;
@@ -31,7 +32,7 @@ public class NotificationService {
         Notification notification = Notification.builder()
                 .recipient(recipient)
                 .sender(sender)
-                .type(type)
+                .type(type.name())
                 .referenceId(referenceId)
                 .message(message)
                 .build();
@@ -40,9 +41,12 @@ public class NotificationService {
     }
 
     @Transactional(readOnly = true)
-    public Page<Notification> getUserNotifications(Long userId, int page, int size) {
+    public Page<NotificationDto> getUserNotifications(Long userId, int page, int size) {
         User user = userRepository.findById(userId).orElseThrow(() -> new RuntimeException("User not found"));
-        return notificationRepository.findByRecipientOrderByCreatedAtDesc(user, PageRequest.of(page, size));
+        Page<Notification> notifications = notificationRepository.findByRecipientOrderByCreatedAtDesc(user, PageRequest.of(page, size));
+        
+        // Convert to DTOs
+        return notifications.map(NotificationDto::fromEntity);
     }
 
     @Transactional

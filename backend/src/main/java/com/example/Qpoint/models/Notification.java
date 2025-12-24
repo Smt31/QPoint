@@ -21,9 +21,8 @@ public class Notification {
     @JoinColumn(name = "sender_id")
     private User sender; // Who triggered the notification
 
-    @Column(nullable = false)
-    @Enumerated(EnumType.STRING)
-    private NotificationType type;
+    @Column(nullable = false, columnDefinition = "VARCHAR(50)")
+    private String type;
 
     // To link to the relevant entity (Post, Answer, Comment)
     private Long referenceId;
@@ -38,7 +37,20 @@ public class Notification {
     @Builder.Default
     @Column(nullable = false)
     private Instant createdAt = Instant.now();
-
+    
+    @Transient
+    public NotificationType getTypeEnum() {
+        try {
+            return NotificationType.valueOf(this.type);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
+    
+    public void setTypeEnum(NotificationType type) {
+        this.type = type != null ? type.name() : null;
+    }
+    
     public enum NotificationType {
         VOTE_QUESTION, VOTE_ANSWER,
         COMMENT_REPLY, ANSWER_POST, COMMENT_POST,

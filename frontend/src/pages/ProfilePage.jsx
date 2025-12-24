@@ -515,9 +515,9 @@ export default function ProfilePage() {
                               <p className="text-sm text-gray-900">
                                 <span className="font-semibold">{req.requesterName}</span> requested you to answer:
                               </p>
-                              <a href={`/question/${req.questionId}`} className="text-base font-medium text-red-600 hover:underline block mt-1 leading-snug">
+                              <span onClick={() => navigate(`/question/${req.questionId}`)} className="text-base font-medium text-red-600 hover:underline block mt-1 leading-snug cursor-pointer">
                                 {req.questionTitle}
-                              </a>
+                              </span>
                               <p className="text-xs text-gray-400 mt-2">{new Date(req.createdAt).toLocaleDateString()}</p>
                             </div>
                             <button

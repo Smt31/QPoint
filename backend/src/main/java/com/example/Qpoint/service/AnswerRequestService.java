@@ -143,4 +143,38 @@ public class AnswerRequestService {
                 .filter(r -> r.getStatus() == AnswerRequest.RequestStatus.PENDING)
                 .collect(Collectors.toList());
     }
+    
+    @Transactional(readOnly = true)
+    public List<UserProfileDto> searchExperts(String query, Long userId) {
+        try {
+            // Search by username, full name, or topics
+            List<User> users = userRepository.findByUsernameContainingIgnoreCaseOrFullNameContainingIgnoreCase(query, query);
+            
+            // If no users found by name/username, try searching by topics
+            if (users.isEmpty()) {
+                users = userRepository.findByTopicsNameContainingIgnoreCase(query);
+            }
+            
+            // Filter out the current user
+            users = users.stream()
+                    .filter(u -> !u.getUserId().equals(userId))
+                    .limit(10)
+                    .collect(Collectors.toList());
+            
+            return users.stream()
+                    .map(userService::convertToUserProfileDto)
+                    .collect(Collectors.toList());
+                    
+        } catch (Exception e) {
+            e.printStackTrace();
+            // Fallback: return users that match the query in any way
+            return userRepository.findAll(org.springframework.data.domain.PageRequest.of(0, 10))
+                    .getContent().stream()
+                    .filter(u -> !u.getUserId().equals(userId))
+                    .filter(u -> u.getUsername().toLowerCase().contains(query.toLowerCase()) || 
+                                u.getFullName().toLowerCase().contains(query.toLowerCase()))
+                    .map(userService::convertToUserProfileDto)
+                    .collect(Collectors.toList());
+        }
+    }
 }

@@ -8,8 +8,8 @@ const Navbar = ({ user }) => {
 
   const handleLogout = () => {
     localStorage.removeItem('token');
-    // Force reload or navigate to landing to reset app state
-    window.location.href = '/';
+    // Navigate to landing to reset app state
+    navigate('/', { replace: true });
   };
 
   const handleSearchSubmit = (e) => {

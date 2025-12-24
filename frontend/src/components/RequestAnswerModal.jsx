@@ -6,12 +6,20 @@ export default function RequestAnswerModal({ isOpen, onClose, questionId, curren
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [sentRequests, setSentRequests] = useState({}); // map userId -> boolean
+    const [searchQuery, setSearchQuery] = useState('');
+    const [searchResults, setSearchResults] = useState([]);
+    const [isSearching, setIsSearching] = useState(false);
 
     useEffect(() => {
         if (isOpen && questionId) {
             loadSuggestions();
         }
     }, [isOpen, questionId]);
+
+    // Filter suggestions based on search query
+    const filteredSuggestions = searchQuery 
+        ? searchResults 
+        : suggestions;
 
     const loadSuggestions = async () => {
         try {
@@ -29,6 +37,27 @@ export default function RequestAnswerModal({ isOpen, onClose, questionId, curren
             setError('Failed to load suggestions');
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleSearch = async (query) => {
+        if (!query.trim()) {
+            setSearchQuery('');
+            setSearchResults([]);
+            return;
+        }
+        
+        try {
+            setIsSearching(true);
+            setError('');
+            const data = await requestApi.searchExperts(query.trim());
+            setSearchResults(data || []);
+            setSearchQuery(query.trim());
+        } catch (err) {
+            setError('Failed to search experts');
+            setSearchResults([]);
+        } finally {
+            setIsSearching(false);
         }
     };
 
@@ -53,6 +82,22 @@ export default function RequestAnswerModal({ isOpen, onClose, questionId, curren
                     </button>
                 </div>
 
+                {/* Search Input */}
+                <div className="p-4 border-b border-gray-100 bg-gray-50">
+                    <div className="relative">
+                        <input
+                            type="text"
+                            placeholder="Search experts by name, username, or tags..."
+                            value={searchQuery}
+                            onChange={(e) => handleSearch(e.target.value)}
+                            className="w-full px-4 py-2 pl-10 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-red-200 focus:border-red-400 transition-all"
+                        />
+                        <svg className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                    </div>
+                </div>
+
                 <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
                     {loading ? (
                         <div className="space-y-4">
@@ -66,17 +111,21 @@ export default function RequestAnswerModal({ isOpen, onClose, questionId, curren
                                 </div>
                             ))}
                         </div>
+                    ) : isSearching ? (
+                        <div className="text-center text-gray-500 py-8">Searching experts...</div>
                     ) : error ? (
                         <div className="text-center text-red-500 py-8">{error}</div>
-                    ) : suggestions.length === 0 ? (
+                    ) : filteredSuggestions.length === 0 ? (
                         <div className="text-center text-gray-500 py-12 flex flex-col items-center gap-3">
                             <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center text-gray-400 text-3xl">Experts</div>
-                            <p>No suggestions found for this topic.</p>
+                            <p>No experts found {searchQuery ? `for "${searchQuery}"` : 'for this topic'}.</p>
                         </div>
                     ) : (
                         <div className="space-y-4">
-                            <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-2">Suggested Experts</p>
-                            {suggestions.map(user => (
+                            <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-2">
+                                {searchQuery ? `Search Results for "${searchQuery}"` : 'Suggested Experts'}
+                            </p>
+                            {filteredSuggestions.map(user => (
                                 <div key={user.userId} className="flex items-center justify-between group p-2 hover:bg-gray-50 rounded-lg transition-colors">
                                     <div className="flex items-center gap-3">
                                         <div className="relative">

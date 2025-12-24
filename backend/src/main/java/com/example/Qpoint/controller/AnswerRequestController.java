@@ -23,12 +23,13 @@ public class AnswerRequestController {
         this.answerRequestService = answerRequestService;
         this.userService = userService;
     }
+    
     private UserProfileDto requireUser(UserDetails userDetails) {
-    if (userDetails == null) {
-        throw new RuntimeException("Unauthorized");
+        if (userDetails == null) {
+            throw new RuntimeException("Unauthorized");
+        }
+        return userService.getUserProfileByUsername(userDetails.getUsername());
     }
-    return userService.getUserProfileByUsername(userDetails.getUsername());
-}
 
     @PostMapping
     public ResponseEntity<?> createRequest(
@@ -71,6 +72,15 @@ public class AnswerRequestController {
         return ResponseEntity.ok(dtos);
     }
 
+    @GetMapping("/search")
+    public ResponseEntity<List<UserProfileDto>> searchExperts(
+            @RequestParam String query,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        
+        UserProfileDto me = requireUser(userDetails);
+        return ResponseEntity.ok(answerRequestService.searchExperts(query, me.getUserId()));
+    }
+    
     @lombok.Data
     public static class CreateRequestDto {
         private Long questionId;
