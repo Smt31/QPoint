@@ -1,5 +1,5 @@
 -- ===================================================================
--- PRODUCTION-READY DATABASE INDEXES FOR QPOINT
+-- PRODUCTION-READY DATABASE INDEXES FOR Qnect
 -- Run this script manually in Neon SQL Editor
 -- ===================================================================
 

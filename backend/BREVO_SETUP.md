@@ -22,7 +22,7 @@ Brevo (formerly Sendinblue) has a much better free tier than Resend:
 
 1. After logging in, go to **https://app.brevo.com/settings/keys/api**
 2. Click **"Generate a new API key"**
-3. Give it a name (e.g., "Qpoint OTP Service")
+3. Give it a name (e.g., "Qnect OTP Service")
 4. Copy the API key (starts with `xkeysib-`)
 
 > ⚠️ **Important**: Save this key immediately! You won't be able to see it again.

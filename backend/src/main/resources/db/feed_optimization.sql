@@ -1,5 +1,5 @@
 -- =============================================================================
--- OPTIMAL FEED LOADING STRATEGY FOR QPOINT
+-- OPTIMAL FEED LOADING STRATEGY FOR Qnect
 -- PostgreSQL + Spring JPA
 -- =============================================================================
 

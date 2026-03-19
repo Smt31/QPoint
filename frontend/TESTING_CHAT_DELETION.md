@@ -7,7 +7,7 @@ Before testing, verify:
 ### 1. Backend is Running
 Check terminal for:
 ```
-Started QpointApplication in X.XXX seconds
+Started QnectApplication in X.XXX seconds
 Tomcat started on port(s): 8080 (http)
 ```
 

@@ -1,7 +1,7 @@
-# React Query Migration Guide for QPoint Application
+# React Query Migration Guide for Qnect Application
 
 ## Overview
-This document outlines the migration from manual state management to React Query for efficient data fetching, caching, and state management in the QPoint application.
+This document outlines the migration from manual state management to React Query for efficient data fetching, caching, and state management in the Qnect application.
 
 ## Root Causes Addressed
 1. **Unnecessary API calls**: Components were refetching data on every mount/navigation

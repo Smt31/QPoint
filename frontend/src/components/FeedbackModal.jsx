@@ -5,19 +5,19 @@ const feedbackOptions = [
         emoji: '🐞',
         label: 'Report a Bug',
         desc: 'Something isn\'t working as expected',
-        url: 'https://qpoint.canny.io/bug-reports',
+        url: 'https://Qnect.canny.io/bug-reports',
     },
     {
         emoji: '💡',
         label: 'Request a Feature',
         desc: 'Suggest a new idea or capability',
-        url: 'https://qpoint.canny.io/feature-requests',
+        url: 'https://Qnect.canny.io/feature-requests',
     },
     {
         emoji: '🛠',
         label: 'Suggest Improvement',
         desc: 'Help us make something better',
-        url: 'https://qpoint.canny.io/improvements',
+        url: 'https://Qnect.canny.io/improvements',
     },
 ];
 

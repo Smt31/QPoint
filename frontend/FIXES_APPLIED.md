@@ -44,7 +44,7 @@
 
 Backend is restarting now. Wait for:
 ```
-Started QpointApplication in X seconds
+Started QnectApplication in X seconds
 Tomcat started on port(s): 8080 (http)
 ```
 

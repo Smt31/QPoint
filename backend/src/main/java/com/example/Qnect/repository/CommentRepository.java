@@ -1,0 +1,44 @@
+package com.example.Qnect.repository;
+
+import com.example.Qnect.models.Comment;
+import com.example.Qnect.models.Post;
+import com.example.Qnect.models.User;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+import java.util.List;
+import java.util.Optional;
+
+public interface CommentRepository extends JpaRepository<Comment, Long> {
+    Page<Comment> findByPostAndParentIsNullOrderByCreatedAtDesc(Post post, Pageable pageable);
+    Page<Comment> findByPostOrderByCreatedAtDesc(Post post, Pageable pageable);
+    List<Comment> findByPostOrderByCreatedAtDesc(Post post); // For news comments without pagination
+    Page<Comment> findByAuthorOrderByCreatedAtDesc(User author, Pageable pageable);
+    @Query(value = "SELECT c FROM Comment c LEFT JOIN FETCH c.author ORDER BY c.createdAt DESC",
+           countQuery = "SELECT COUNT(c) FROM Comment c")
+    Page<Comment> findAllWithAuthor(Pageable pageable);
+
+    @Query(value = "SELECT c FROM Comment c LEFT JOIN FETCH c.author WHERE LOWER(c.content) LIKE LOWER(CONCAT('%', :content, '%')) ORDER BY c.createdAt DESC",
+           countQuery = "SELECT COUNT(c) FROM Comment c WHERE LOWER(c.content) LIKE LOWER(CONCAT('%', :content, '%'))")
+    Page<Comment> findByContentContainingIgnoreCaseWithAuthor(@Param("content") String content, Pageable pageable);
+
+    void deleteByPost(Post post);
+    
+    // AI Comment methods
+    Optional<Comment> findByPostAndIsAiGeneratedTrue(Post post);
+    boolean existsByPostAndIsAiGeneratedTrue(Post post);
+    
+    // Optimized queries with JOIN FETCH to prevent N+1
+    @Query("""
+        SELECT DISTINCT c FROM Comment c 
+        LEFT JOIN FETCH c.author 
+        LEFT JOIN FETCH c.replies r 
+        LEFT JOIN FETCH r.author 
+        WHERE c.post.id = :postId AND c.parent IS NULL 
+        ORDER BY c.createdAt DESC
+        """)
+    List<Comment> findTopLevelCommentsWithAuthors(@Param("postId") Long postId);
+}

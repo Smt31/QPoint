@@ -1,4 +1,4 @@
-# QPoint Backend Changes Summary
+# Qnect Backend Changes Summary
 
 ## Fixed Issues
 
@@ -6,15 +6,15 @@
 - **Problem**: System was sending OTP even when the password was wrong
 - **Solution**: Added a new `/auth/login` endpoint that validates email and password before sending OTP
 - **Files Modified**:
-  - `src/main/java/com/example/Qpoint/controller/AuthController.java` - Added login endpoint
-  - `src/main/java/com/example/Qpoint/service/OtpService.java` - Added `validateCredentials` method
+  - `src/main/java/com.example.Qnect/controller/AuthController.java` - Added login endpoint
+  - `src/main/java/com.example.Qnect/service/OtpService.java` - Added `validateCredentials` method
 
 ### 2. Username Validation - Enhanced username requirements
 - **Problem**: Username field existed but lacked proper validation
 - **Solution**: Added validation constraints to ensure usernames meet requirements
 - **Files Modified**:
-  - `src/main/java/com/example/Qpoint/models/User.java` - Added @Size and @Pattern validation
-  - `src/main/java/com/example/Qpoint/dto/VerifyOtpRequest.java` - Added validation annotations
+  - `src/main/java/com.example.Qnect/models/User.java` - Added @Size and @Pattern validation
+  - `src/main/java/com.example.Qnect/dto/VerifyOtpRequest.java` - Added validation annotations
 
 ## New Features Implemented
 
@@ -27,30 +27,30 @@
 ### 2. Like Functionality
 - **Feature**: Enable users to like posts and comments
 - **Files Created**:
-  - `src/main/java/com/example/Qpoint/models/Like.java` - Entity for post likes
-  - `src/main/java/com/example/Qpoint/models/CommentLike.java` - Entity for comment likes
-  - `src/main/java/com/example/Qpoint/repository/LikeRepository.java` - Repository for post likes
-  - `src/main/java/com/example/Qpoint/repository/CommentLikeRepository.java` - Repository for comment likes
-  - `src/main/java/com/example/Qpoint/service/LikeService.java` - Service for post likes
-  - `src/main/java/com/example/Qpoint/service/CommentLikeService.java` - Service for comment likes
-  - `src/main/java/com/example/Qpoint/controller/LikeController.java` - Controller for post likes
-  - `src/main/java/com/example/Qpoint/controller/CommentLikeController.java` - Controller for comment likes
+  - `src/main/java/com.example.Qnect/models/Like.java` - Entity for post likes
+  - `src/main/java/com.example.Qnect/models/CommentLike.java` - Entity for comment likes
+  - `src/main/java/com.example.Qnect/repository/LikeRepository.java` - Repository for post likes
+  - `src/main/java/com.example.Qnect/repository/CommentLikeRepository.java` - Repository for comment likes
+  - `src/main/java/com.example.Qnect/service/LikeService.java` - Service for post likes
+  - `src/main/java/com.example.Qnect/service/CommentLikeService.java` - Service for comment likes
+  - `src/main/java/com.example.Qnect/controller/LikeController.java` - Controller for post likes
+  - `src/main/java/com.example.Qnect/controller/CommentLikeController.java` - Controller for comment likes
 
 ### 3. API Endpoint Alignment
 - **Feature**: Ensure backend endpoints match frontend expectations
 - **Files Modified**:
-  - `src/main/java/com/example/Qpoint/controller/FeedController.java` - Added `/api/home/questions` alias for `/api/feed`
-  - `src/main/java/com/example/Qpoint/controller/QuestionsController.java` - Created new controller for `/api/questions` endpoints
+  - `src/main/java/com.example.Qnect/controller/FeedController.java` - Added `/api/home/questions` alias for `/api/feed`
+  - `src/main/java/com.example.Qnect/controller/QuestionsController.java` - Created new controller for `/api/questions` endpoints
 
 ## Code Cleanup
 
 ### 1. Removed Unused Files
 - **Action**: Deleted unused `TrendingDto.java` DTO
-- **File Removed**: `src/main/java/com/example/Qpoint/dto/TrendingDto.java`
+- **File Removed**: `src/main/java/com.example.Qnect/dto/TrendingDto.java`
 
 ### 2. Cleaned Up Main Application Class
 - **Action**: Removed unused `@PropertySource` annotation
-- **File Modified**: `src/main/java/com/example/Qpoint/QpointApplication.java`
+- **File Modified**: `src/main/java/com.example.Qnect/QnectApplication.java`
 
 ## Updated Dependencies
 
